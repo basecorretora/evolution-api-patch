@@ -1,0 +1,120 @@
+diff --git a/src/api/dto/chat.dto.ts b/src/api/dto/chat.dto.ts
+index b11f32b..f0d201c 100644
+--- a/src/api/dto/chat.dto.ts
++++ b/src/api/dto/chat.dto.ts
+@@ -84,6 +84,12 @@ export class ArchiveChatDto {
+ export class MarkChatUnreadDto {
+   lastMessage?: LastMessage;
+   chat?: string;
++  /**
++   * [PATCH BASE CORRETORA] true = marcar como LIDO (app-state markRead:true —
++   * o mesmo gesto do WhatsApp Web, que apaga o badge no celular do dono).
++   * Ausente/false = comportamento original (marcar como NÃO lido).
++   */
++  read?: boolean;
+ }
+ 
+ export class PrivacySettingDto {
+diff --git a/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts b/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts
+index 60e857f..29fa3cd 100644
+--- a/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts
++++ b/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts
+@@ -781,16 +781,36 @@ export class BaileysStartupService extends ChannelStartupService {
+         }
+       >[],
+     ) => {
++      // [PATCH BASE CORRETORA] O app-state do WhatsApp (multi-device) traz aqui
++      // o estado real do chat — inclusive `unreadCount: 0` quando o usuário lê
++      // a conversa em OUTRO aparelho (é assim que o WhatsApp Web apaga o badge).
++      // O map original descartava tudo menos o id, e o webhook chegava vazio.
++      // Agora repassamos os campos de estado e PERSISTIMOS o contador.
+       const chatsRaw = chats.map((chat) => {
+-        return { remoteJid: chat.id, instanceId: this.instanceId };
++        const raw: Record<string, unknown> = { remoteJid: chat.id, instanceId: this.instanceId };
++        if (chat.name !== undefined) raw.name = chat.name;
++        if ((chat as any).unreadCount !== undefined) raw.unreadCount = (chat as any).unreadCount;
++        if ((chat as any).archived !== undefined) raw.archived = (chat as any).archived;
++        if ((chat as any).pinned !== undefined) raw.pinned = (chat as any).pinned;
++        if ((chat as any).muteEndTime !== undefined) raw.muteEndTime = (chat as any).muteEndTime;
++        if ((chat as any).markedAsUnread !== undefined) raw.markedAsUnread = (chat as any).markedAsUnread;
++        return raw;
+       });
+ 
+       this.sendDataWebhook(Events.CHATS_UPDATE, chatsRaw);
+ 
+       for (const chat of chats) {
++        const unread = (chat as any).unreadCount;
++        // unreadCount === 0  → lido em outro aparelho
++        // unreadCount === -1 → marcado como NÃO lido pelo usuário
++        // null/undefined     → sem informação de leitura neste evento
++        const data: Record<string, unknown> = { remoteJid: chat.id };
++        if (typeof unread === 'number' && unread >= 0) {
++          data.unreadMessages = unread;
++        }
+         await this.prismaRepository.chat.updateMany({
+-          where: { instanceId: this.instanceId, remoteJid: chat.id, name: chat.name },
+-          data: { remoteJid: chat.id },
++          where: { instanceId: this.instanceId, remoteJid: chat.id },
++          data,
+         });
+       }
+     },
+@@ -3757,9 +3777,20 @@ export class BaileysStartupService extends ChannelStartupService {
+         throw new NotFoundException('Last message not found');
+       }
+ 
+-      await this.client.chatModify({ markRead: false, lastMessages: [last_message] }, createJid(number));
++      // [PATCH BASE CORRETORA] `read: true` marca como LIDO via app-state — é o
++      // gesto que sincroniza com o celular/WhatsApp Web do próprio dono.
++      // O caminho (chatModify) já existia: só estava travado em markRead:false.
++      const markRead = data.read === true;
++      await this.client.chatModify({ markRead, lastMessages: [last_message] }, createJid(number));
++
++      if (markRead) {
++        await this.prismaRepository.chat.updateMany({
++          where: { instanceId: this.instanceId, remoteJid: createJid(number) },
++          data: { unreadMessages: 0 },
++        });
++      }
+ 
+-      return { chatId: number, markedChatUnread: true };
++      return { chatId: number, markedChatUnread: !markRead, markedChatRead: markRead };
+     } catch (error) {
+       throw new InternalServerErrorException({
+         markedChatUnread: false,
+diff --git a/src/api/routes/chat.router.ts b/src/api/routes/chat.router.ts
+index 158947e..dca53c5 100644
+--- a/src/api/routes/chat.router.ts
++++ b/src/api/routes/chat.router.ts
+@@ -90,6 +90,18 @@ export class ChatRouter extends RouterBroker {
+ 
+         return res.status(HttpStatus.CREATED).json(response);
+       })
++      // [PATCH BASE CORRETORA] marcar chat como LIDO — sincroniza o badge com
++      // o celular do dono (app-state markRead:true, como o WhatsApp Web)
++      .post(this.routerPath('markChatRead'), ...guards, async (req, res) => {
++        const response = await this.dataValidate<MarkChatUnreadDto>({
++          request: req,
++          schema: markChatUnreadSchema,
++          ClassRef: MarkChatUnreadDto,
++          execute: (instance, data) => chatController.markChatUnread(instance, { ...data, read: true }),
++        });
++
++        return res.status(HttpStatus.CREATED).json(response);
++      })
+       .delete(this.routerPath('deleteMessageForEveryone'), ...guards, async (req, res) => {
+         const response = await this.dataValidate<DeleteMessage>({
+           request: req,
+diff --git a/src/validate/chat.schema.ts b/src/validate/chat.schema.ts
+index 7dae445..b8f12ec 100644
+--- a/src/validate/chat.schema.ts
++++ b/src/validate/chat.schema.ts
+@@ -96,6 +96,8 @@ export const markChatUnreadSchema: JSONSchema7 = {
+   type: 'object',
+   properties: {
+     chat: { type: 'string' },
++    // [PATCH BASE CORRETORA] true = marcar como lido (sincroniza com o celular)
++    read: { type: 'boolean' },
+     lastMessage: {
+       type: 'object',
+       properties: {
