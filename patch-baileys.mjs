@@ -23,7 +23,18 @@
  *      A rc14 já corrigiu os dois pontos; aqui aplicamos só eles, sem arrastar
  *      8 meses de outras mudanças para dentro da Evolution 2.3.7.
  *
- * 3.   Nome de conta COMERCIAL nunca chega (633 contatos aparecendo como número)
+ * 1b+1c. As duas anteriores não bastaram — o log em modo detalhado (22/08 02:27)
+ *      mostrou o motivo, e ele é o mesmo relatado na issue:
+ *          patch markChatAsReadAction → "resyncing regular_low from v1"
+ *          → "Invalid patch mac" → "resyncing from v0"
+ *          → "error:1C800064" (bad decrypt do OpenSSL) → e volta ao v0, em loop.
+ *      Um único registro corrompido derruba o lote inteiro e a reconstrução do
+ *      estado nunca termina — então TODO comando continua saindo com versão 0.
+ *      Causa de fundo: chaves de sincronização corrompidas por rotação de
+ *      dispositivos vinculados. Estas duas correções são a camada de
+ *      resiliência: registro podre é PULADO em vez de abortar o lote.
+ *
+ * 5.   Nome de conta COMERCIAL nunca chega (633 contatos aparecendo como número)
  *
  *      O nome verificado de um business viaja em `verifiedBizName`, mas o
  *      evento que o carrega só é emitido quando `pushName` existe — e conta
@@ -87,6 +98,57 @@ patch(
                         }`,
 );
 
+// ── 1b. assinatura do lote inválida não aborta mais a reconstrução ──────────
+// Um lote com assinatura ruim derrubava TODA a sincronização. Cada registro
+// dentro dele ainda é validado individualmente (fix 1c), então seguir aqui é
+// seguro: o que estiver íntegro entra, o que estiver podre é descartado.
+patch(
+  'Utils/chat-utils.js',
+  'estado: assinatura de lote inválida não derruba mais a reconstrução',
+  `        if (Buffer.compare(patchMac, msg.patchMac) !== 0) {
+            throw new Boom('Invalid patch mac');
+        }`,
+  `        if (Buffer.compare(patchMac, msg.patchMac) !== 0) {
+            // [PATCH BASE CORRETORA] abortar aqui trava a reconstrução do estado
+            // em loop (v1 → mac inválido → v0 → bad decrypt → v0...). Cada
+            // registro é validado individualmente logo abaixo.
+            console.warn('[baileys/patch] assinatura de lote inválida — seguindo com validação por registro');
+        }`,
+);
+
+// ── 1c. registro corrompido é pulado, não derruba o lote ────────────────────
+// É onde estouram "HMAC content verification failed" e o bad decrypt do
+// OpenSSL (error:1C800064) que apareceram no log.
+patch(
+  'Utils/chat-utils.js',
+  'estado: registro corrompido é pulado em vez de abortar o lote',
+  `    for (const msgMutation of msgMutations) {
+        // if it's a syncdmutation, get the operation property`,
+  `    for (const msgMutation of msgMutations) {
+      // [PATCH BASE CORRETORA] um registro podre (HMAC ou AES) abortava o lote
+      // inteiro e a reconstrução do estado nunca terminava. Agora é pulado.
+      try {
+        // if it's a syncdmutation, get the operation property`,
+);
+
+patch(
+  'Utils/chat-utils.js',
+  'estado: fechamento do laço que pula registro corrompido',
+  `            operation: operation
+        });
+    }
+    return await ltGenerator.finish();`,
+  `            operation: operation
+        });
+      } catch (err) {
+        // [PATCH BASE CORRETORA] registro descartado: chave rotacionada ou dado
+        // corrompido. O resto do lote segue — é assim que o WA Web se recupera.
+        console.warn('[baileys/patch] registro de estado descartado:', err && err.message);
+      }
+    }
+    return await ltGenerator.finish();`,
+);
+
 // ── 3. deixar o nome de conta comercial chegar ───────────────────────────────
 patch(
   'Socket/chats.js',
@@ -98,4 +160,4 @@ patch(
         if (!!msg.pushName || !!msg.verifiedBizName) {`,
 );
 
-console.log(`\n${aplicados}/3 correções aplicadas no Baileys.`);
+console.log(`\n${aplicados}/6 correções aplicadas no Baileys.`);
