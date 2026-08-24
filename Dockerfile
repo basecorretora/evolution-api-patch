@@ -1,20 +1,14 @@
-# Evolution API 2.3.7 + patches Base Corretora
-#   - sincronização de leitura (código da Evolution, via git apply)
-#   - app-state + nome comercial (biblioteca Baileys, via patch-baileys.mjs)
+# Evolution API 2.3.7 + patch Base Corretora (sincronização de leitura)
 #
-# Espelho FIEL do Dockerfile oficial da tag 2.3.7 — as únicas diferenças são os
-# dois passos de patch. Se qualquer um não aplicar limpo, o build FALHA
-# (proposital: melhor não subir do que subir sem o patch).
+# Espelho FIEL do Dockerfile oficial da tag 2.3.7 — a única diferença é o
+# `git apply` do patch antes do build. Se o patch não aplicar limpo, o build
+# FALHA (proposital: melhor não subir do que subir sem o patch).
 #
-# Por que existe, em duas camadas:
-#   - Evolution: recebe do Baileys o app-state do WhatsApp (o canal que o
-#     WhatsApp Web usa para sincronizar "chat lido" entre aparelhos) e DESCARTA
-#     o dado antes de entregar no webhook.
-#   - Baileys: manda os comandos de app-state com versão zerada, leva 409 do
-#     WhatsApp dentro de um envelope "type=result" e reporta sucesso — e nunca
-#     emite o nome de conta comercial. Ver README.md e patch-baileys.mjs.
+# Por que existe: a Evolution 2.3.7 recebe do Baileys o app-state do WhatsApp
+# (o mesmo canal que o WhatsApp Web usa para sincronizar "chat lido" entre
+# aparelhos) e DESCARTA o dado antes de entregar no webhook. Ver README.md.
 #
-# Build:     docker build -t base-corretora/evolution-api:2.3.7-sync2 .
+# Build:     docker build -t base-corretora/evolution-api:2.3.7-sync .
 # Rollback:  voltar a imagem do serviço para evoapicloud/evolution-api:v2.3.7
 
 FROM node:24-alpine AS builder
@@ -22,7 +16,7 @@ FROM node:24-alpine AS builder
 RUN apk update && \
     apk add --no-cache git ffmpeg wget curl bash openssl dos2unix
 
-LABEL version="2.3.7-sync2" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + app-state + nome comercial)"
+LABEL version="2.3.7-sync" description="Evolution API 2.3.7 + patch Base Corretora (sync de leitura)"
 LABEL maintainer="Base Corretora"
 
 WORKDIR /evolution
@@ -35,16 +29,6 @@ COPY 2.3.7-sync-leitura.patch /tmp/basecorretora.patch
 RUN git apply --verbose /tmp/basecorretora.patch
 
 RUN npm ci --silent
-
-# Patch da biblioteca Baileys (node_modules) — precisa vir DEPOIS do npm ci.
-# Conserta 3 defeitos que nenhum ajuste na Evolution alcança:
-#   1+2. "marcar lido/nao lido" respondia sucesso e nao fazia nada no aparelho
-#        (versao do app-state zerada -> WhatsApp devolve 409 dentro de um
-#         "type=result" -> o Baileys reporta sucesso). Issue #1406.
-#   3.   nome de conta COMERCIAL nunca chegava (contato exibido como numero).
-# O script FALHA o build se qualquer alvo nao casar exatamente.
-COPY patch-baileys.mjs /tmp/patch-baileys.mjs
-RUN node /tmp/patch-baileys.mjs
 
 RUN cp ./.env.example ./.env
 
