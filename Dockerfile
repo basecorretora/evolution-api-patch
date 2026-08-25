@@ -1,4 +1,6 @@
-# Evolution API 2.3.7 + patch Base Corretora (sincronização de leitura)
+# Evolution API 2.3.7 + patches Base Corretora — RECEITA DO LABORATÓRIO (branch lab)
+#   - sincronização de leitura (igual à frota)
+#   - nome de conta comercial (patch-baileys-nome.mjs — EM TESTE no lab)
 #
 # Espelho FIEL do Dockerfile oficial da tag 2.3.7 — a única diferença é o
 # `git apply` do patch antes do build. Se o patch não aplicar limpo, o build
@@ -16,7 +18,7 @@ FROM node:24-alpine AS builder
 RUN apk update && \
     apk add --no-cache git ffmpeg wget curl bash openssl dos2unix
 
-LABEL version="2.3.7-sync" description="Evolution API 2.3.7 + patch Base Corretora (sync de leitura)"
+LABEL version="2.3.7-sync-nome-lab" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + nome comercial — LAB)"
 LABEL maintainer="Base Corretora"
 
 WORKDIR /evolution
@@ -29,6 +31,12 @@ COPY 2.3.7-sync-leitura.patch /tmp/basecorretora.patch
 RUN git apply --verbose /tmp/basecorretora.patch
 
 RUN npm ci --silent
+
+# Patch da biblioteca Baileys (node_modules) — precisa vir DEPOIS do npm ci.
+# SÓ o nome comercial (fix seguro, não toca em criptografia). As correções de
+# app-state ficam FORA: derrubaram sessões da frota em 22-24/08.
+COPY patch-baileys-nome.mjs /tmp/patch-baileys-nome.mjs
+RUN node /tmp/patch-baileys-nome.mjs
 
 RUN cp ./.env.example ./.env
 
