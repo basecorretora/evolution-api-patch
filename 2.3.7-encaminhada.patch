@@ -1,0 +1,80 @@
+diff --git a/src/api/dto/sendMessage.dto.ts b/src/api/dto/sendMessage.dto.ts
+index ba9ecf5..2d4425c 100644
+--- a/src/api/dto/sendMessage.dto.ts
++++ b/src/api/dto/sendMessage.dto.ts
+@@ -14,6 +14,8 @@ export class Options {
+   mentionsEveryOne?: boolean;
+   mentioned?: string[];
+   webhookUrl?: string;
++  /** [PATCH BASE CORRETORA] marca a mensagem como encaminhada (etiqueta no aparelho) */
++  forwarded?: boolean;
+ }
+ 
+ export class MediaMessage {
+@@ -45,6 +47,8 @@ export class Metadata {
+   mentioned?: string[];
+   encoding?: boolean;
+   notConvertSticker?: boolean;
++  /** [PATCH BASE CORRETORA] marca a mensagem como encaminhada (etiqueta no aparelho) */
++  forwarded?: boolean;
+ }
+ 
+ export class SendTextDto extends Metadata {
+diff --git a/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts b/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts
+index 60e857f..50dee47 100644
+--- a/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts
++++ b/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts
+@@ -2392,6 +2392,8 @@ export class BaileysStartupService extends ChannelStartupService {
+           quoted,
+           null,
+           group?.ephemeralDuration,
++          // [PATCH BASE CORRETORA] etiqueta "Encaminhada" no aparelho do destinatário
++          options?.forwarded ? { isForwarded: true, forwardingScore: 1 } : undefined,
+           // group?.participants,
+         );
+       } else {
+@@ -2406,6 +2408,10 @@ export class BaileysStartupService extends ChannelStartupService {
+           },
+           disappearingMode: { initiator: 0 },
+         };
++        // [PATCH BASE CORRETORA] etiqueta "Encaminhada" no aparelho do destinatário
++        if (options?.forwarded) {
++          contextInfo = { ...contextInfo, isForwarded: true, forwardingScore: 1 };
++        }
+         messageSent = await this.sendMessage(
+           sender,
+           message,
+@@ -2643,6 +2649,7 @@ export class BaileysStartupService extends ChannelStartupService {
+         linkPreview: data?.linkPreview,
+         mentionsEveryOne: data?.mentionsEveryOne,
+         mentioned: data?.mentioned,
++        forwarded: data?.forwarded,
+       },
+       isIntegration,
+     );
+@@ -2994,6 +3001,7 @@ export class BaileysStartupService extends ChannelStartupService {
+         quoted: data?.quoted,
+         mentionsEveryOne: data?.mentionsEveryOne,
+         mentioned: data?.mentioned,
++        forwarded: data?.forwarded,
+       },
+       isIntegration,
+     );
+@@ -3224,7 +3232,7 @@ export class BaileysStartupService extends ChannelStartupService {
+         const result = this.sendMessageWithTyping<AnyMessageContent>(
+           data.number,
+           { audio: convert, ptt: true, mimetype: 'audio/ogg; codecs=opus' },
+-          { presence: 'recording', delay: data?.delay },
++          { presence: 'recording', delay: data?.delay, forwarded: data?.forwarded },
+           isIntegration,
+         );
+ 
+@@ -3241,7 +3249,7 @@ export class BaileysStartupService extends ChannelStartupService {
+         ptt: true,
+         mimetype: 'audio/ogg; codecs=opus',
+       },
+-      { presence: 'recording', delay: data?.delay },
++      { presence: 'recording', delay: data?.delay, forwarded: data?.forwarded },
+       isIntegration,
+     );
+   }
