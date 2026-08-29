@@ -21,10 +21,44 @@ index ba9ecf5..2d4425c 100644
  
  export class SendTextDto extends Metadata {
 diff --git a/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts b/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts
-index 60e857f..50dee47 100644
+index 60e857f..2f9029b 100644
 --- a/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts
 +++ b/src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts
-@@ -2392,6 +2392,8 @@ export class BaileysStartupService extends ChannelStartupService {
+@@ -2195,6 +2195,24 @@ export class BaileysStartupService extends ChannelStartupService {
+     }
+ 
+     if (message['conversation']) {
++      // [PATCH BASE CORRETORA] encaminhada: texto puro perde o contextInfo no
++      // Baileys (vira `conversation`). O forward nativo com force gera
++      // extendedTextMessage com isForwarded/forwardingScore no pacote.
++      if (message['contextInfo']?.isForwarded) {
++        return await this.client.sendMessage(
++          sender,
++          {
++            forward: {
++              key: { remoteJid: this.instance.wuid, fromMe: true },
++              message: { conversation: message['conversation'] },
++            },
++            force: true,
++            mentions,
++            contextInfo: message['contextInfo'],
++          } as unknown as AnyMessageContent,
++          option as unknown as MiscMessageGenerationOptions,
++        );
++      }
+       return await this.client.sendMessage(
+         sender,
+         {
+@@ -2212,6 +2230,8 @@ export class BaileysStartupService extends ChannelStartupService {
+         sender,
+         {
+           forward: { key: { remoteJid: this.instance.wuid, fromMe: true }, message },
++          // [PATCH BASE CORRETORA] mídia já sai por forward; force = etiqueta
++          force: !!message['contextInfo']?.isForwarded,
+           mentions,
+           contextInfo: message['contextInfo'],
+         },
+@@ -2392,6 +2412,8 @@ export class BaileysStartupService extends ChannelStartupService {
            quoted,
            null,
            group?.ephemeralDuration,
@@ -33,7 +67,7 @@ index 60e857f..50dee47 100644
            // group?.participants,
          );
        } else {
-@@ -2406,6 +2408,10 @@ export class BaileysStartupService extends ChannelStartupService {
+@@ -2406,6 +2428,10 @@ export class BaileysStartupService extends ChannelStartupService {
            },
            disappearingMode: { initiator: 0 },
          };
@@ -44,7 +78,7 @@ index 60e857f..50dee47 100644
          messageSent = await this.sendMessage(
            sender,
            message,
-@@ -2643,6 +2649,7 @@ export class BaileysStartupService extends ChannelStartupService {
+@@ -2643,6 +2669,7 @@ export class BaileysStartupService extends ChannelStartupService {
          linkPreview: data?.linkPreview,
          mentionsEveryOne: data?.mentionsEveryOne,
          mentioned: data?.mentioned,
@@ -52,7 +86,7 @@ index 60e857f..50dee47 100644
        },
        isIntegration,
      );
-@@ -2994,6 +3001,7 @@ export class BaileysStartupService extends ChannelStartupService {
+@@ -2994,6 +3021,7 @@ export class BaileysStartupService extends ChannelStartupService {
          quoted: data?.quoted,
          mentionsEveryOne: data?.mentionsEveryOne,
          mentioned: data?.mentioned,
@@ -60,7 +94,7 @@ index 60e857f..50dee47 100644
        },
        isIntegration,
      );
-@@ -3224,7 +3232,7 @@ export class BaileysStartupService extends ChannelStartupService {
+@@ -3224,7 +3252,7 @@ export class BaileysStartupService extends ChannelStartupService {
          const result = this.sendMessageWithTyping<AnyMessageContent>(
            data.number,
            { audio: convert, ptt: true, mimetype: 'audio/ogg; codecs=opus' },
@@ -69,7 +103,7 @@ index 60e857f..50dee47 100644
            isIntegration,
          );
  
-@@ -3241,7 +3249,7 @@ export class BaileysStartupService extends ChannelStartupService {
+@@ -3241,7 +3269,7 @@ export class BaileysStartupService extends ChannelStartupService {
          ptt: true,
          mimetype: 'audio/ogg; codecs=opus',
        },
