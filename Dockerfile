@@ -19,7 +19,7 @@ FROM node:24-alpine AS builder
 RUN apk update && \
     apk add --no-cache git ffmpeg wget curl bash openssl dos2unix
 
-LABEL version="2.3.7-sync-nome" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + nome comercial)"
+LABEL version="2.3.7-sync-nome-fwd" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + nome comercial)"
 LABEL maintainer="Base Corretora"
 
 WORKDIR /evolution
@@ -30,6 +30,12 @@ RUN git clone --depth 1 --branch 2.3.7 https://github.com/evolution-foundation/e
 # Patch da casa (4 arquivos, ~56 linhas)
 COPY 2.3.7-sync-leitura.patch /tmp/basecorretora.patch
 RUN git apply --verbose /tmp/basecorretora.patch
+
+# Patch da etiqueta "Encaminhada" (provado no lab 29/08): expõe `forwarded`
+# nos envios (texto/mídia/áudio) → forward nativo com force → etiqueta no
+# aparelho do destinatário. 2 arquivos, sem criptografia/sessão.
+COPY 2.3.7-encaminhada.patch /tmp/basecorretora-encaminhada.patch
+RUN git apply --verbose /tmp/basecorretora-encaminhada.patch
 
 RUN npm ci --silent
 
