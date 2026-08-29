@@ -147,4 +147,35 @@ patch(
                     }`,
 );
 
-console.log(`\n${aplicados}/4 correções de app-state aplicadas no Baileys (LAB v2 — porta do rc14, validações intactas).`);
+// ── 3. DIAGNÓSTICO (lab): ao falhar a assinatura de um patch, dizer QUAL ───────
+//     keyId, versão, nº de mutações, se veio "external". Sem isso o log só diz
+//     "Invalid patch mac" e não dá pra saber se é chave ausente/velha ou pacote.
+patch(
+  'Utils/chat-utils.js',
+  'diagnóstico: contexto do patch quando a assinatura falha',
+  `        const decodeResult = await decodeSyncdPatch(syncd, name, newState, getAppStateSyncKey, shouldMutate
+            ? mutation => {
+                const index = mutation.syncAction.index?.toString();
+                mutationMap[index] = mutation;
+            }
+            : () => { }, true);`,
+  `        let decodeResult;
+        try {
+            decodeResult = await decodeSyncdPatch(syncd, name, newState, getAppStateSyncKey, shouldMutate
+                ? mutation => {
+                    const index = mutation.syncAction.index?.toString();
+                    mutationMap[index] = mutation;
+                }
+                : () => { }, true);
+        }
+        catch (err) {
+            // [PATCH BASE CORRETORA — LAB] contexto do patch que falhou
+            const keyIdB64 = syncd.keyId?.id ? Buffer.from(syncd.keyId.id).toString('base64') : null;
+            let haveKey = null;
+            try { haveKey = !!(keyIdB64 && await getAppStateSyncKey(keyIdB64)); } catch { haveKey = 'erro'; }
+            logger?.warn({ name, version: patchVersion, keyId: keyIdB64, haveKey, mutations: syncd.mutations?.length ?? 0, external: !!syncd.externalMutations, snapshotMac: syncd.snapshotMac ? Buffer.from(syncd.snapshotMac).toString('base64') : null }, 'DIAG app-state: falha ao decodificar patch');
+            throw err;
+        }`,
+);
+
+console.log(`\n${aplicados}/5 correções de app-state aplicadas no Baileys (LAB v2.1 — porta do rc14 + diagnóstico, validações intactas).`);
