@@ -18,7 +18,7 @@ FROM node:24-alpine AS builder
 RUN apk update && \
     apk add --no-cache git ffmpeg wget curl bash openssl dos2unix
 
-LABEL version="2.3.7-sync-nome-fwd-appstate-v2-lab" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + nome comercial — LAB)"
+LABEL version="2.3.7-sync-nome-fwd-appstate-v2.1-lab" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + nome comercial — LAB)"
 LABEL maintainer="Base Corretora"
 
 WORKDIR /evolution
