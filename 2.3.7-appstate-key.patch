@@ -1,0 +1,51 @@
+diff --git a/src/utils/use-multi-file-auth-state-prisma.ts b/src/utils/use-multi-file-auth-state-prisma.ts
+index d090780..5a8f522 100644
+--- a/src/utils/use-multi-file-auth-state-prisma.ts
++++ b/src/utils/use-multi-file-auth-state-prisma.ts
+@@ -182,7 +182,11 @@ export default async function useMultiFileAuthStatePrisma(
+             ids.map(async (id) => {
+               let value = await readData(`${type}-${id}`);
+               if (type === 'app-state-sync-key' && value) {
+-                value = proto.Message.AppStateSyncKeyData.create(value);
++                // [PATCH BASE CORRETORA] O arquivo/Redis guarda keyData como TEXTO base64 (JSON.stringify
++                // do proto). `create()` NÃO decodifica → keyData vira string → o hkdf do Baileys
++                // (new Uint8Array(string)) deriva chaves VAZIAS → "Invalid patch mac" em todo patch
++                // lido do disco. `fromObject()` (o que o próprio Baileys usa) decodifica pra bytes.
++                value = proto.Message.AppStateSyncKeyData.fromObject(value);
+               }
+ 
+               data[id] = value;
+diff --git a/src/utils/use-multi-file-auth-state-provider-files.ts b/src/utils/use-multi-file-auth-state-provider-files.ts
+index eecc310..118c15e 100644
+--- a/src/utils/use-multi-file-auth-state-provider-files.ts
++++ b/src/utils/use-multi-file-auth-state-provider-files.ts
+@@ -116,7 +116,11 @@ export class AuthStateProvider {
+               ids.map(async (id) => {
+                 let value = await readData(`${type}-${id}`);
+                 if (type === 'app-state-sync-key' && value) {
+-                  value = proto.Message.AppStateSyncKeyData.create(value);
++                  // [PATCH BASE CORRETORA] O arquivo/Redis guarda keyData como TEXTO base64 (JSON.stringify
++                // do proto). `create()` NÃO decodifica → keyData vira string → o hkdf do Baileys
++                // (new Uint8Array(string)) deriva chaves VAZIAS → "Invalid patch mac" em todo patch
++                // lido do disco. `fromObject()` (o que o próprio Baileys usa) decodifica pra bytes.
++                value = proto.Message.AppStateSyncKeyData.fromObject(value);
+                 }
+ 
+                 data[id] = value;
+diff --git a/src/utils/use-multi-file-auth-state-redis-db.ts b/src/utils/use-multi-file-auth-state-redis-db.ts
+index e0981c7..9ec30d8 100644
+--- a/src/utils/use-multi-file-auth-state-redis-db.ts
++++ b/src/utils/use-multi-file-auth-state-redis-db.ts
+@@ -61,7 +61,11 @@ export async function useMultiFileAuthStateRedisDb(
+             ids.map(async (id) => {
+               let value = await readData(`${type}-${id}`);
+               if (type === 'app-state-sync-key' && value) {
+-                value = proto.Message.AppStateSyncKeyData.create(value);
++                // [PATCH BASE CORRETORA] O arquivo/Redis guarda keyData como TEXTO base64 (JSON.stringify
++                // do proto). `create()` NÃO decodifica → keyData vira string → o hkdf do Baileys
++                // (new Uint8Array(string)) deriva chaves VAZIAS → "Invalid patch mac" em todo patch
++                // lido do disco. `fromObject()` (o que o próprio Baileys usa) decodifica pra bytes.
++                value = proto.Message.AppStateSyncKeyData.fromObject(value);
+               }
+ 
+               data[id] = value;
