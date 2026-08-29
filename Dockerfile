@@ -18,7 +18,7 @@ FROM node:24-alpine AS builder
 RUN apk update && \
     apk add --no-cache git ffmpeg wget curl bash openssl dos2unix
 
-LABEL version="2.3.7-sync-nome-fwd-lab" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + nome comercial — LAB)"
+LABEL version="2.3.7-sync-nome-fwd-appstate-lab" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + nome comercial — LAB)"
 LABEL maintainer="Base Corretora"
 
 WORKDIR /evolution
@@ -43,6 +43,12 @@ RUN npm ci --silent
 # app-state ficam FORA: derrubaram sessões da frota em 22-24/08.
 COPY patch-baileys-nome.mjs /tmp/patch-baileys-nome.mjs
 RUN node /tmp/patch-baileys-nome.mjs
+
+# CAMPANHA 2 do lab (29/08): app-state — só os 2 fixes estilo rc14, com as
+# validações de integridade INTACTAS (1b/1c derrubaram sessões da frota).
+# Objetivo: "lido no Berê Zap" apagar o badge do celular. Dias de molho.
+COPY patch-baileys-appstate.mjs /tmp/patch-baileys-appstate.mjs
+RUN node /tmp/patch-baileys-appstate.mjs
 
 RUN cp ./.env.example ./.env
 
