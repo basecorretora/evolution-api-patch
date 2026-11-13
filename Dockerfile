@@ -2,6 +2,8 @@
 #   - sincronização de leitura (git apply, desde 21/08)
 #   - nome de conta comercial (patch-baileys-nome.mjs — provado no LAB em 25/08:
 #     8h de sessão estável + Localiza/Instituto/Dr Marcelo capturados com nome)
+#   - confirmar os avisos <status> do WhatsApp (patch-baileys-status-ack.mjs —
+#     provado no LAB em 13/11: sem ele cada WhatsApp cai ~1 vez por hora)
 #
 # Espelho FIEL do Dockerfile oficial da tag 2.3.7 — a única diferença é o
 # `git apply` do patch antes do build. Se o patch não aplicar limpo, o build
@@ -19,7 +21,7 @@ FROM node:24-alpine AS builder
 RUN apk update && \
     apk add --no-cache git ffmpeg wget curl bash openssl dos2unix
 
-LABEL version="2.3.7-sync-nome-fwd" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + nome comercial)"
+LABEL version="2.3.7-sync-nome-fwd-statusack" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + nome comercial + ack de status)"
 LABEL maintainer="Base Corretora"
 
 WORKDIR /evolution
@@ -44,6 +46,12 @@ RUN npm ci --silent
 # até sobreviverem ao laboratório (derrubaram sessões da frota em 22-24/08).
 COPY patch-baileys-nome.mjs /tmp/patch-baileys-nome.mjs
 RUN node /tmp/patch-baileys-nome.mjs
+
+# Confirmar os avisos <status> do WhatsApp (ZAP-0079, provado no lab 13/11).
+# Sem o ack o servidor do WhatsApp derruba a conexão ("stream errored out",
+# <ack class="status">). Mesma correção dos mantenedores (hotfix/baileys-status-ack).
+COPY patch-baileys-status-ack.mjs /tmp/patch-baileys-status-ack.mjs
+RUN node /tmp/patch-baileys-status-ack.mjs
 
 RUN cp ./.env.example ./.env
 
