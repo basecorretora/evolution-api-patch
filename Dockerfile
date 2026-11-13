@@ -18,7 +18,7 @@ FROM node:24-alpine AS builder
 RUN apk update && \
     apk add --no-cache git ffmpeg wget curl bash openssl dos2unix
 
-LABEL version="2.3.7-sync-nome-fwd-appstate-v3-lab" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + nome comercial — LAB)"
+LABEL version="2.3.7-sync-nome-fwd-appstate-v3-statusack-lab" description="Evolution API 2.3.7 + patches Base Corretora (sync de leitura + nome comercial — LAB)"
 LABEL maintainer="Base Corretora"
 
 WORKDIR /evolution
@@ -54,6 +54,13 @@ RUN node /tmp/patch-baileys-nome.mjs
 # Objetivo: "lido no Berê Zap" apagar o badge do celular. Dias de molho.
 COPY patch-baileys-appstate.mjs /tmp/patch-baileys-appstate.mjs
 RUN node /tmp/patch-baileys-appstate.mjs
+
+# Confirmar os avisos <status> do WhatsApp (13/11/2026, ZAP-0079). Sem isso a
+# rc.9 não confirma, o WhatsApp derruba a conexão ("stream errored out",
+# ack class=status) a cada ~50 min e a instância volta "open" mas quebrada.
+# Mesma correção dos mantenedores (hotfix/baileys-status-ack, 2f06ff24).
+COPY patch-baileys-status-ack.mjs /tmp/patch-baileys-status-ack.mjs
+RUN node /tmp/patch-baileys-status-ack.mjs
 
 RUN cp ./.env.example ./.env
 
